@@ -1169,12 +1169,29 @@ end
         }
     end
 
+    @constraints function make_inline_constraints()
+        q(x, y, theta) = MeanField()
+    end
+
+    @model function inline_constraints_function_outer()
+        x ~ Normal(0.0, 1.0)
+        y ~ inline_constraints_inner(x = x) where { constraints = make_inline_constraints() }
+    end
+
     @model function nested_inline_constraints_outer()
         x ~ Normal(0.0, 1.0)
         y ~ inline_constraints_middle(x = x)
     end
 
     model = create_model(with_plugins(inline_constraints_outer(), PluginsCollection(VariationalConstraintsPlugin())))
+    context = getcontext(model)
+    inner_context = context[inline_constraints_inner, 1]
+    node = inner_context[NormalMeanVariance, 2]
+    @test get(context_options(inner_context), :constraints, nothing) isa Constraints
+    @test hasextra(model[node], :factorization_constraint_indices)
+    @test Tuple.(getextra(model[node], :factorization_constraint_indices)) == ((1,), (2,), (3,))
+
+    model = create_model(with_plugins(inline_constraints_function_outer(), PluginsCollection(VariationalConstraintsPlugin())))
     context = getcontext(model)
     inner_context = context[inline_constraints_inner, 1]
     node = inner_context[NormalMeanVariance, 2]
